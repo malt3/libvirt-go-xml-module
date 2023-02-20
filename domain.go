@@ -2534,6 +2534,7 @@ type DomainFeatureCapability struct {
 type DomainLaunchSecurity struct {
 	SEV    *DomainLaunchSecuritySEV    `xml:"-"`
 	S390PV *DomainLaunchSecurityS390PV `xml:"-"`
+	TDX *DomainLaunchSecurityTDX `xml:"-"`
 }
 
 type DomainLaunchSecuritySEV struct {
@@ -2546,6 +2547,14 @@ type DomainLaunchSecuritySEV struct {
 }
 
 type DomainLaunchSecurityS390PV struct {
+}
+
+type DomainLaunchSecurityTDX struct {
+	Policy                 *uint  `xml:"policy"`
+	MrConfigId             string  `xml:"mrConfigId,omitempty"`
+	MrOwner                string  `xml:"mrOwner,omitempty"`
+	MrOwnerConfig          string  `xml:"mrOwnerConfig,omitempty"`
+	QuoteGenerationService string  `xml:"Quote-Generation-Service,omitempty"`
 }
 
 type DomainFeatureCapabilities struct {
@@ -6313,6 +6322,110 @@ func (d *DomainCPU) Marshal() (string, error) {
 	return string(doc), nil
 }
 
+func (a *DomainLaunchSecurityTDX) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
+
+	e.EncodeToken(start)
+
+	if a.Policy != nil {
+		policy := xml.StartElement{
+			Name: xml.Name{Local: "policy"},
+		}
+		e.EncodeToken(policy)
+		e.EncodeToken(xml.CharData(fmt.Sprintf("0x%04x", *a.Policy)))
+		e.EncodeToken(policy.End())
+	}
+
+	mrConfigId := xml.StartElement{
+		Name: xml.Name{Local: "mrConfigId"},
+	}
+	e.EncodeToken(mrConfigId)
+	e.EncodeToken(xml.CharData(fmt.Sprintf("%s", a.MrConfigId)))
+	e.EncodeToken(mrConfigId.End())
+
+	mrOwner := xml.StartElement{
+		Name: xml.Name{Local: "mrOwner"},
+	}
+	e.EncodeToken(mrOwner)
+	e.EncodeToken(xml.CharData(fmt.Sprintf("%s", a.MrOwner)))
+	e.EncodeToken(mrOwner.End())
+
+	quoteGenerationService := xml.StartElement{
+		Name: xml.Name{Local: "Quote-Generation-Service"},
+	}
+	e.EncodeToken(quoteGenerationService)
+	e.EncodeToken(xml.CharData(fmt.Sprintf("%s", a.MrOwnerConfig)))
+	e.EncodeToken(quoteGenerationService.End())
+
+	e.EncodeToken(start.End())
+
+	return nil
+}
+
+func (a *DomainLaunchSecurityTDX) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
+	for {
+		tok, err := d.Token()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return err
+		}
+
+		switch tok := tok.(type) {
+		case xml.StartElement:
+			if tok.Name.Local == "policy" {
+				data, err := d.Token()
+				if err != nil {
+					return err
+				}
+				switch data := data.(type) {
+				case xml.CharData:
+					if err := unmarshalUintAttr(string(data), &a.Policy, 16); err != nil {
+						return err
+					}
+				}
+			} else if tok.Name.Local == "mrConfigId" {
+				data, err := d.Token()
+				if err != nil {
+					return err
+				}
+				switch data := data.(type) {
+				case xml.CharData:
+					a.MrConfigId = string(data)
+				}
+			} else if tok.Name.Local == "mrOwner" {
+				data, err := d.Token()
+				if err != nil {
+					return err
+				}
+				switch data := data.(type) {
+				case xml.CharData:
+					a.MrOwner = string(data)
+				}
+			} else if tok.Name.Local == "mrOwnerConfig" {
+				data, err := d.Token()
+				if err != nil {
+					return err
+				}
+				switch data := data.(type) {
+				case xml.CharData:
+					a.MrOwnerConfig = string(data)
+				}
+			} else if tok.Name.Local == "Quote-Generation-Service" {
+				data, err := d.Token()
+				if err != nil {
+					return err
+				}
+				switch data := data.(type) {
+				case xml.CharData:
+					a.QuoteGenerationService = string(data)
+				}
+			}
+		}
+	}
+	return nil
+}
+
 func (a *DomainLaunchSecuritySEV) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
 
 	if a.KernelHashes != "" {
@@ -6456,10 +6569,13 @@ func (a *DomainLaunchSecurity) MarshalXML(e *xml.Encoder, start xml.StartElement
 			xml.Name{Local: "type"}, "s390-pv",
 		})
 		return e.EncodeElement(a.S390PV, start)
-	} else {
-		return nil
+	} else if a.TDX != nil {
+		start.Attr = append(start.Attr, xml.Attr{
+			xml.Name{Local: "type"}, "tdx",
+		})
 	}
 
+	return nil
 }
 
 func (a *DomainLaunchSecurity) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
@@ -6481,6 +6597,9 @@ func (a *DomainLaunchSecurity) UnmarshalXML(d *xml.Decoder, start xml.StartEleme
 	} else if typ == "s390-pv" {
 		a.S390PV = &DomainLaunchSecurityS390PV{}
 		return d.DecodeElement(a.S390PV, &start)
+	} else if typ == "tdx" {
+		a.TDX = &DomainLaunchSecurityTDX{}
+		return d.DecodeElement(a.TDX, &start)
 	}
 
 	return nil
